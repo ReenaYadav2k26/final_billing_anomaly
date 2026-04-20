@@ -7,34 +7,34 @@ import os
 app = Flask(__name__)
 
 # -----------------------------
-# LOAD MODEL ARTIFACTS
+# 🔹 LOAD MODEL ARTIFACTS
 # -----------------------------
 try:
     model = pickle.load(open("model/isolation_forest_model.pkl", "rb"))
     scaler = pickle.load(open("model/scaler.pkl", "rb"))
     features = pickle.load(open("model/features.pkl", "rb"))
-    
-    # Optional threshold
+
+    # Load threshold if exists
     if os.path.exists("model/threshold.pkl"):
         threshold = pickle.load(open("model/threshold.pkl", "rb"))
     else:
         threshold = -0.05  # fallback
 
 except Exception as e:
-    raise Exception(f"Error loading model files: {e}")
+    raise RuntimeError(f"❌ Model loading failed: {e}")
 
 # -----------------------------
-# API KEY (use env in prod)
+# 🔐 API KEY (env-based)
 # -----------------------------
 API_KEY = os.getenv("API_KEY", "my-secret-key-123")
 
 # -----------------------------
-# PREPROCESS FUNCTION
+# 🔹 PREPROCESS FUNCTION
 # -----------------------------
 def preprocess_input(df):
     try:
-        # Convert dates (optional)
-        date_cols = ['due_date','paid_date','bill_from_date','bill_thru_date']
+        # Date conversion (optional)
+        date_cols = ['due_date', 'paid_date', 'bill_from_date', 'bill_thru_date']
         for col in date_cols:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce')
@@ -44,35 +44,38 @@ def preprocess_input(df):
             if col not in df.columns:
                 df[col] = 0
 
-        # Keep only training features
+        # Keep only trained features
         df = df[features]
 
-        # Replace inf
+        # Clean values
         df = df.replace([np.inf, -np.inf], np.nan)
-
-        # Fill NaN
         df = df.fillna(0)
 
         return df
 
     except Exception as e:
-        raise Exception(f"Preprocessing error: {e}")
+        raise ValueError(f"Preprocessing error: {e}")
 
 # -----------------------------
-# PREDICT ROUTE
+# 🔹 PREDICT ROUTE
 # -----------------------------
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        # API KEY check
+        # 🔐 API KEY VALIDATION
         if request.headers.get("x-api-key") != API_KEY:
             return jsonify({"error": "Unauthorized"}), 401
 
         data = request.get_json()
 
+        # Validate input
         if not data or "invoice_features" not in data:
             return jsonify({"error": "Missing 'invoice_features'"}), 400
 
+        if not isinstance(data["invoice_features"], dict):
+            return jsonify({"error": "Invalid format for invoice_features"}), 400
+
+        # Convert to DataFrame
         df = pd.DataFrame([data["invoice_features"]])
 
         # Preprocess
@@ -84,23 +87,32 @@ def predict():
         # Score
         score = model.decision_function(X_scaled)[0]
 
-        return jsonify({
+        # Result
+        result = {
             "anomaly_score": float(score),
             "is_anomaly": bool(score < threshold)
-        })
+        }
+
+        return jsonify(result)
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": str(e)
+        }), 500
 
 # -----------------------------
-# HEALTH CHECK
+# 🔹 HEALTH CHECK
 # -----------------------------
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({"message": "Invoice Anomaly API Running"})
+    return jsonify({
+        "status": "running",
+        "service": "Invoice Anomaly Detection API"
+    })
 
 # -----------------------------
-# MAIN
+# 🔹 MAIN
 # -----------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    port = int(os.getenv("PORT", 5000))  # Render compatibility
+    app.run(host="0.0.0.0", port=port, debug=False)
