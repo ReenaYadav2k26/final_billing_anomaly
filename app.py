@@ -10,9 +10,9 @@ app = Flask(__name__)
 # 🔹 LOAD MODEL ARTIFACTS
 # -----------------------------
 try:
-    model = pickle.load(open("model/isolation_forest_model (1).pkl", "rb"))
+    model = pickle.load(open("model/isolation_forest_model.pkl", "rb"))
     scaler = pickle.load(open("model/scaler.pkl", "rb"))
-    features = pickle.load(open("model/features (1).pkl", "rb"))
+    features = pickle.load(open("model/features.pkl", "rb"))
 
     # Load threshold if exists
     if os.path.exists("model/threshold.pkl"):
